@@ -1,11 +1,24 @@
-name: Build APK
+name: Build iStoreOS APK v3
 on:
-  workflow_dispatch:
   push:
     branches: [main]
+  workflow_dispatch:
 jobs:
-  build:
+  package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo Building package
+      - name: Build with apk-tools v3
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work alpine:edge sh -ec '
+            apk --version
+            test -f source.tar.xz
+            mkdir -p /tmp/wgroot dist
+            tar -xJf source.tar.xz -C /tmp/wgroot
+            apk mkpkg --files /tmp/wgroot --info name:luci-app-wg-enhanced --info version:1.0.0.13-r4 --info arch:x86_64 --info description:WireGuard-backup-restore --info license:MIT --output dist/luci-app-wg-enhanced-1.0.0.13-r4.apk
+            apk adbdump dist/luci-app-wg-enhanced-1.0.0.13-r4.apk >/dev/null
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: istoreos25-apk
+          path: dist/*.apk
