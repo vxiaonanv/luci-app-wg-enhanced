@@ -3,22 +3,40 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build with apk-tools v3
+      - name: Check original plugin source
         run: |
-          docker run --rm -v "$PWD:/work" -w /work alpine:edge sh -ec '
+          test -s source.tar.xz || { echo "::error::Missing source.tar.xz containing the four original v1.0.0-13 plugin files"; exit 1; }
+      - name: Build APK v3 with apk-tools 3
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work alpine:3.23 sh -euc '
             apk --version
-            test -f source.tar.xz
             mkdir -p /tmp/wgroot dist
             tar -xJf source.tar.xz -C /tmp/wgroot
-            apk mkpkg --files /tmp/wgroot --info name:luci-app-wg-enhanced --info version:1.0.0.13-r4 --info arch:x86_64 --info description:WireGuard-backup-restore --info license:MIT --output dist/luci-app-wg-enhanced-1.0.0.13-r4.apk
+            test -s /tmp/wgroot/usr/libexec/wg-enhanced
+            test -s /tmp/wgroot/www/luci-static/resources/view/services/wg-enhanced.js
+            apk mkpkg --files /tmp/wgroot \
+              --info name:luci-app-wg-enhanced \
+              --info version:1.0.0.13-r4 \
+              --info arch:x86_64 \
+              --info description:"WireGuard backup restore LuCI plugin" \
+              --info license:MIT \
+              --info origin:luci-app-wg-enhanced \
+              --info depends:luci-base \
+              --info depends:luci-proto-wireguard \
+              --info depends:wireguard-tools \
+              --output dist/luci-app-wg-enhanced-1.0.0.13-r4.apk
             apk adbdump dist/luci-app-wg-enhanced-1.0.0.13-r4.apk >/dev/null
           '
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: istoreos25-apk
           path: dist/*.apk
+          if-no-files-found: error
